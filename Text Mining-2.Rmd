@@ -1,0 +1,130 @@
+---
+title: "Text Mining"
+author: "Fotso Tenku"
+date: "4 3 2022"
+output: html_document
+---
+
+## Twitter Zugriffsdaten einfügen
+```{r}
+#Twitter Zugriffsdaten einfügen
+library(rjson)
+library(httr)
+library(dplyr)
+library(purrr)
+library(rtweet)
+create_token(app= "joelapp",consumer_key = "5Jy1dDeedrA5ONqpCozRreOuc",
+             consumer_secret = "Dy679sT6xvDtVEtCcwD3pzYp0wBeqSEzvrAbEks7f8bm76TH14")
+```
+
+## Download Tweets
+
+```{r}
+trump.tweets <- search_tweets("realDonaldTrump", n = 1000, include_rts=FALSE)
+head(trump.tweets$text)
+#trump.tweets.df <- tbl_df(map_df(trump.tweets, as.data.frame))
+```
+
+## Daten aus Twitter einlesen
+
+```{r}
+library(tidytext)
+
+trump.tweets.df2 <- trump.tweets %>%
+  unnest_tokens(word, text)
+
+```
+
+## Entfernung der Stoppwörter
+
+```{r}
+data(stop_words)
+trump.tweets.df2 <- trump.tweets.df2 %>%
+  anti_join(stop_words)
+# Analyse der Worthäufigkeiten
+trump.tweets.df2 %>%
+  count(word, sort = TRUE)
+# Erweiterung der Stoppwörter
+custom.stop.words <- bind_rows(tibble(word = c("https", "t.co", "amp"), 
+                                          lexicon = c("custom", "custom", "custom")),
+                               stop_words)
+trump.tweets.df2 <- trump.tweets.df2 %>%
+  anti_join(custom.stop.words)
+
+```
+
+##  Visualisierung der Worthäufigkeiten
+
+```{r}
+library(ggplot2)
+trump.tweets.df2 %>%
+  count(word, sort = TRUE) %>%
+  filter(n > 5) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n)) +
+  geom_col() +
+  xlab(NULL) +
+  coord_flip()
+```
+
+## Sentimentanalyse
+
+```{r}
+library(textdata)
+library(stringr)
+
+# Positive Wörter
+nrc.positive <- get_sentiments("nrc") %>% 
+  filter(sentiment == "positive")
+trump.tweets.df2 %>%
+  inner_join(nrc.positive) %>%
+  count(word, sort = TRUE)
+```
+
+```{r}
+#Negative Wörter
+
+nrc.negative <- get_sentiments("nrc") %>% 
+  filter(sentiment == "negative")
+trump.tweets.df2 %>%
+  inner_join(nrc.negative) %>%
+  count(word, sort = TRUE)
+```
+
+## Übersicht über positive und negative Wörter
+
+```{r}
+bing.word.counts <- trump.tweets.df2 %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  ungroup()
+bing.word.counts
+```
+
+## Visualisierung der Sentimentanalyse mit Balkendiagrammen durch ggplot2
+
+```{r}
+bing.word.counts %>%
+  group_by(sentiment) %>%
+  top_n(10) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n, fill = sentiment)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~sentiment, scales = "free_y") +
+  labs(y = "Contribution to sentiment",
+       x = NULL) +
+  coord_flip()
+```
+
+## Visualisierung der Sentimentanalyse mit Wortwolken
+
+```{r}
+library(wordcloud)
+
+trump.tweets.df2 %>%
+  anti_join(stop_words) %>%
+  anti_join(custom.stop.words) %>% 
+  count(word) %>%
+  with(wordcloud(word, n, max.words = 10))
+```
